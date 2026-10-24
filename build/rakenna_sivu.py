@@ -5,7 +5,7 @@ import json, os, sys, html, datetime, re
 from zoneinfo import ZoneInfo
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-OUT = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, '..', 'Tesla-ohjelmistoversiot-v1.html')
+OUT = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, '..', 'Tesla-ohjelmistoversiot-v2.html')
 D = json.load(open(os.path.join(HERE, 'data.json')))
 HEL = ZoneInfo('Europe/Helsinki'); CHI = ZoneInfo('America/Chicago')
 E = html.escape
@@ -41,6 +41,18 @@ fdt, fz = hel(fetched)
 FETCHED_FI = '%s klo %s Suomen aikaa (%s)' % (fdt.strftime('%-d.%-m.%Y'), fdt.strftime('%H.%M'), fz)
 FETCHED_EN = '%s %s Finnish time (%s)' % (fdt.strftime('%-d %b %Y'), fdt.strftime('%H:%M'), fz)
 
+LK_F = os.path.join(HERE, 'links.json')
+LINKS = json.load(open(LK_F))['links'] if os.path.exists(LK_F) else {}
+SRC_FI = {'NotATeslaApp': 'NotATeslaApp – julkaisutiedote', 'Teslascope': 'Teslascope – versiosivu (ominaisuudet)', 'TeslaFi': 'TeslaFi – versiosivu (julkaisutiedote)'}
+def VL(v, txt=None):
+    l = LINKS.get(v)
+    t = E(txt if txt is not None else v)
+    if not l: return t
+    return '<a class="vl" href="%s" target="_blank" rel="noopener" title="%s">%s</a>' % (E(l['url']), E(SRC_FI.get(l['src'], l['src'])), t)
+def SVL(v, inner):
+    l = LINKS.get(v)
+    if not l: return inner
+    return '<a href="%s" target="_blank" rel="noopener"><title>%s</title>%s</a>' % (E(l['url']), E(SRC_FI.get(l['src'], l['src'])), inner)
 TF = D['teslafi']; DET = D['teslafi_detail']; TS = D.get('teslascope') or {}; NA = D.get('nata') or {}
 fsd_of = {v['v']: v['fsd'] for v in TF['versions']}
 pend_of = {v['v']: v['pending'] for v in TF['versions']}
@@ -99,7 +111,7 @@ def svg_bars(items, color='#38bdf8', w=640, label_w=150):
     out = ['<svg viewBox="0 0 %d %d" width="100%%" role="img" xmlns="http://www.w3.org/2000/svg" style="max-width:%dpx">' % (w, h, w)]
     for i, (lab, c, extra) in enumerate(items):
         y = i * (bh + gap) + 2; bw = (w - label_w - 110) * c / mx
-        out.append('<text x="%d" y="%d" fill="#e2e8f0" font-size="13" text-anchor="end">%s</text>' % (label_w - 8, y + 16, E(lab)))
+        out.append(SVL(lab, '<text x="%d" y="%d" fill="#7dd3fc" font-size="13" text-anchor="end" text-decoration="underline">%s</text>' % (label_w - 8, y + 16, E(lab))))
         out.append('<rect x="%d" y="%d" width="%.1f" height="%d" rx="4" fill="%s"/>' % (label_w, y, max(bw, 2), bh, color))
         out.append('<text x="%.1f" y="%d" fill="#94a3b8" font-size="12">%s</text>' % (label_w + bw + 6, y + 16, E(extra)))
     out.append('</svg>'); return ''.join(out)
@@ -126,15 +138,15 @@ def stacked_hw_svg(vec_by_label, w=640):
 # ---------------- sections
 rl = TF.get('rolling') or {}
 kpi = []
-kpi.append((bi('Jaossa nyt (TeslaFi, maailma)', 'Rolling out now (TeslaFi, world)'), rl.get('version', '–'),
+kpi.append((bi('Jaossa nyt (TeslaFi, maailma)', 'Rolling out now (TeslaFi, world)'), VL(rl['version']) if rl.get('version') else '–',
             bi('%s autoa (%s %%), %s odottaa' % (fmt(rl.get('cars', 0)), str(rl.get('pct', '')).replace('.', ','), fmt(rl.get('pending', 0))),
                '%s cars (%s%%), %s waiting' % (rl.get('cars', 0), rl.get('pct', ''), rl.get('pending', 0)))))
 if fi_common:
-    kpi.append((bi('Yleisin versio Suomessa', 'Most common in Finland'), fi_common[0]['v'],
+    kpi.append((bi('Yleisin versio Suomessa', 'Most common in Finland'), VL(fi_common[0]['v']),
                 bi('%d / %d suomalaista autoa (%s %%)' % (fi_common[1], tot_fi, pct(fi_common[1], tot_fi)),
                    '%d of %d Finnish cars' % (fi_common[1], tot_fi))))
 if fi_new:
-    kpi.append((bi('Uusin versio Suomessa', 'Newest seen in Finland'), fi_new[0]['v'],
+    kpi.append((bi('Uusin versio Suomessa', 'Newest seen in Finland'), VL(fi_new[0]['v']),
                 bi('%d autoa' % fi_new[1], '%d cars' % fi_new[1])))
 kpi.append((bi('Suomalaisia autoja TeslaFi-otoksessa', 'Finnish cars in TeslaFi sample'), fmt(tot_fi),
             bi('koko otos %s autoa' % fmt(tot_w), 'whole sample %s cars' % tot_w)))
@@ -148,7 +160,7 @@ def fi_table():
     for r in fi_rows:
         t = sum(r['fi'])
         h.append('<tr><td><b>%s</b></td><td class="mut">%s</td>%s<td class="n"><b>%d</b></td><td class="n">%s</td></tr>' % (
-            E(r['v']), E(r['f']), ''.join('<td class="n">%s</td>' % (c or '<span class="mut">·</span>') for c in r['fi']), t, pct(t, tot_fi)))
+            VL(r['v']), E(r['f']), ''.join('<td class="n">%s</td>' % (c or '<span class="mut">·</span>') for c in r['fi']), t, pct(t, tot_fi)))
     h.append('<tr class="tot"><td>%s</td><td></td>%s<td class="n">%d</td><td class="n">100</td></tr></tbody></table>' % (
         bi('Yhteensä', 'Total'), ''.join('<td class="n">%d</td>' % c for c in fi_hw_tot), tot_fi))
     return ''.join(h)
@@ -162,7 +174,7 @@ def per_table():
         n, c = best(getter, mn)
         if not n: return
         h.append('<tr><td>%s</td><td>%s</td><td><b>%s</b> <span class="mut">%s</span></td><td class="n">%d</td><td><b>%s</b></td><td class="n">%s</td></tr>' % (
-            name, area, E(n[0]['v']), E(n[0]['f']), n[1], E(c[0]['v']), pct(c[1], denom)))
+            name, area, VL(n[0]['v']), E(n[0]['f']), n[1], VL(c[0]['v']), pct(c[1], denom)))
     for m in MODELS:
         den = sum(total(r, 'w', m) for r in rows)
         if den: line(ML[m], bi('Maailma', 'World'), lambda r, m=m: total(r, 'w', m), den)
@@ -196,14 +208,14 @@ def ts_table():
     for a in TS['active']:
         eu = 'Europe' in a['regions'] or 'Finland' in a['regions']
         h.append('<tr%s><td><b>%s</b></td><td class="mut">%s</td><td>%s</td><td>%s</td><td>%s%s</td><td class="n">%s</td></tr>' % (
-            ' class="hl"' if eu else '', E(a['v']), E(a['fsd']), E(a['released']), E(a['wave_rel']), E(a['regions']),
+            ' class="hl"' if eu else '', VL(a['v']), E(a['fsd']), E(a['released']), E(a['wave_rel']), E(a['regions']),
             ' <span class="tag">EU</span>' if eu else '', E(a['dist'])))
     h.append('</tbody></table>'); return ''.join(h)
 
 def ts_fsd():
     out = []
     for k, lst in (TS.get('fsd') or {}).items():
-        items = ', '.join('%s → %s (%s)' % (E(x['fsd'] or ''), E(x['v']), E(x['dist'])) for x in lst[:6])
+        items = ', '.join('%s → %s (%s)' % (E(x['fsd'] or ''), VL(x['v']), E(x['dist'])) for x in lst[:6])
         out.append('<li><b>%s:</b> %s</li>' % (k, items))
     return '<ul class="mut small">%s</ul>' % ''.join(out) if out else ''
 
@@ -215,8 +227,8 @@ def ts_pages():
         md = ', '.join('%s %s %%' % (a, c.replace('.', ',')) for a, b, c in p['models'])
         ct = ', '.join('%s %s %%' % (a.strip(), c.replace('.', ',')) for a, c in p['countries'][:6])
         fi = [c for a, c in p['countries'] if a.strip() == 'Finland']
-        out.append('<tr><td><a href="%s">%s</a></td><td class="n">%s</td><td>%s</td><td>%s</td><td>%s%s</td></tr>' % (
-            E(p['url']), E(v), fmt(p.get('installs') or 0), md, hw, ct, (' · <b>Finland %s %%</b>' % fi[0]) if fi else ''))
+        out.append('<tr><td><b>%s</b> <a class="small" href="%s" target="_blank" rel="noopener">Teslascope</a></td><td class="n">%s</td><td>%s</td><td>%s</td><td>%s%s</td></tr>' % (
+            VL(v), E(p['url']), fmt(p.get('installs') or 0), md, hw, ct, (' · <b>Finland %s %%</b>' % fi[0]) if fi else ''))
     if not out: return ''
     return '<table class="st small"><thead><tr><th>%s</th><th class="n">%s</th><th>%s</th><th>%s</th><th>%s</th></tr></thead><tbody>%s</tbody></table>' % (
         bi('Versio', 'Version'), bi('Asennuksia', 'Installs'), bi('Mallit', 'Models'), bi('Rauta', 'Hardware'), bi('Maat (top)', 'Countries (top)'), ''.join(out))
@@ -230,7 +242,7 @@ def notes():
         meta = lst.get(v, {})
         items = ''.join('<li><b>%s</b> – <span class="mut">%s</span></li>' % (E(f['title']), E(f['desc'][:260] + ('…' if len(f['desc']) > 260 else ''))) for f in n['features'][:10])
         out.append('<details%s><summary><b>%s</b> <span class="mut">%s %s</span> <span class="tag">%d %s</span></summary><ul class="notes">%s</ul><p class="small"><a href="%s">%s</a></p></details>' % (
-            ' open' if not out else '', E(v), E(meta.get('date', '')), ('· ' + E(meta['region'])) if meta.get('region') else '', len(n['features']),
+            ' open' if not out else '', VL(v), E(meta.get('date', '')), ('· ' + E(meta['region'])) if meta.get('region') else '', len(n['features']),
             bi('kohtaa', 'items'), items, E(n['url']), bi('Koko julkaisutiedote (NotATeslaApp, englanniksi)', 'Full release notes (NotATeslaApp)')))
     return ''.join(out)
 
@@ -240,14 +252,14 @@ def nata_list():
     return '<table class="st small"><thead><tr><th>%s</th><th>FSD</th><th>%s</th><th>%s</th><th>%s</th></tr></thead><tbody>%s</tbody></table>' % (
         bi('Versio', 'Version'), bi('Alue', 'Region'), bi('Tyyppi', 'Type'), bi('Päivä', 'Date'),
         ''.join('<tr%s><td><b>%s</b></td><td class="mut">%s</td><td>%s</td><td>%s</td><td>%s</td></tr>' % (
-            ' class="hl"' if x['region'] == 'Europe' else '', E(x['v']), E(x['fsd']), E(x['region'] or '–'), E(x['type']), E(x['date'])) for x in rows_))
+            ' class="hl"' if x['region'] == 'Europe' else '', VL(x['v']), E(x['fsd']), E(x['region'] or '–'), E(x['type']), E(x['date'])) for x in rows_))
 
 def recent_table(lst):
     if not lst: return '<p class="mut">%s</p>' % bi('Ei suomalaisia päivityksiä TeslaFin 100 viimeisimmän joukossa hakuhetkellä.', 'No Finnish updates among the 100 most recent at fetch time.')
     return '<table class="st small"><thead><tr><th>%s</th><th>%s</th><th>%s</th><th>%s</th><th>%s</th><th>AI/HW</th></tr></thead><tbody>%s</tbody></table>' % (
         bi('Aika (Suomen aikaa)', 'Time (Finnish)'), bi('Maa', 'Country'), bi('Uusi versio', 'New version'), bi('Edellinen', 'Previous'), bi('Malli', 'Model'),
         ''.join('<tr><td>%s</td><td>%s</td><td><b>%s</b></td><td class="mut">%s</td><td>%s</td><td>%s</td></tr>' % (
-            conv(x['time_us_central']), E(x['country']), E(x['new']), E(x['prev']), E(x['model']), E(x['ai'])) for x in lst))
+            conv(x['time_us_central']), E(x['country']), VL(x['new']), VL(x['prev']), E(x['model']), E(x['ai'])) for x in lst))
 
 # interactive data
 JS_ROWS = [{'v': r['v'], 'f': r['f'], 'p': r['p'], 'w': r['w'], 'eu': r['eu'], 'fi': r['fi'], 'm': r['m']} for r in rows]
@@ -258,7 +270,7 @@ CSS = r'''
 body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:linear-gradient(160deg,#0f172a,#1e1b4b);color:var(--txt);min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:24px 14px;line-height:1.5}
 .card{background:var(--card);border-radius:16px;padding:28px;max-width:1100px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,.4)}
 h1{margin:0 0 8px;font-size:1.9rem}h2{font-size:1.25rem;margin:30px 0 10px;padding-top:14px;border-top:1px solid #334155}h3{font-size:1.02rem;margin:18px 0 6px}
-a{color:var(--acc)}
+a{color:var(--acc)}a.vl{color:inherit;text-decoration:underline dotted #38bdf8;text-underline-offset:3px}a.vl:hover{color:var(--acc)}
 button{font:inherit;cursor:pointer;border:none;border-radius:10px}
 .primary{background:var(--acc);color:#0f172a;font-weight:600;padding:10px 20px}
 .tag{display:inline-block;background:#334155;color:var(--acc);padding:2px 10px;border-radius:999px;font-size:.8rem}
@@ -289,7 +301,9 @@ body.lang-fi .en{display:none}body.lang-en .fi{display:none}
 '''
 
 JS = r'''
-const ROWS=__ROWS__;const HW=["NoAP","AP1","AP2","AP2.5","AP3","AP4"];
+const ROWS=__ROWS__;const LINKS=__LINKS__;
+function vl(v){const u=LINKS[v];return u?`<a class="vl" href="${u}" target="_blank" rel="noopener">${v}</a>`:v}
+function svl(v,inner){const u=LINKS[v];return u?`<a href="${u}" target="_blank" rel="noopener">${inner}</a>`:inner}const HW=["NoAP","AP1","AP2","AP2.5","AP3","AP4"];
 const HWL={"NoAP":"Ei AP / No AP","AP1":"HW1 / AP1","AP2":"HW2","AP2.5":"HW2.5","AP3":"HW3","AP4":"HW4 / AI4"};
 let st={scope:"fi",model:"",hw:new Set(),q:"",sort:"n",dir:-1};
 function setLang(l){document.body.className="lang-"+l;document.documentElement.lang=l;
@@ -305,12 +319,12 @@ function render(){
  const tot=rs.reduce((a,x)=>a+x.n,0);
  rs.sort((a,b)=>{let d=0;if(st.sort=="v")d=cmpV(a.r.v,b.r.v);else if(st.sort=="f")d=(a.r.f||"").localeCompare(b.r.f||"");else if(st.sort=="p")d=a.r.p-b.r.p;else d=a.n-b.n;return d*st.dir||cmpV(b.r.v,a.r.v)});
  const mx=Math.max(1,...rs.map(x=>x.n));
- document.querySelector("#vt tbody").innerHTML=rs.map(x=>`<tr><td><b>${x.r.v}</b></td><td class="mut">${x.r.f||""}</td><td class="n">${fmt(x.n)}</td><td class="n">${(100*x.n/tot).toFixed(1).replace(".",",")}</td><td><div class="mini"><div style="width:${(100*x.n/mx).toFixed(1)}%"></div></div></td><td class="n mut">${st.scope=="w"&&!st.model&&!st.hw.size?fmt(x.r.p):"–"}</td></tr>`).join("")||`<tr><td colspan=6 class="mut">–</td></tr>`;
+ document.querySelector("#vt tbody").innerHTML=rs.map(x=>`<tr><td><b>${vl(x.r.v)}</b></td><td class="mut">${x.r.f||""}</td><td class="n">${fmt(x.n)}</td><td class="n">${(100*x.n/tot).toFixed(1).replace(".",",")}</td><td><div class="mini"><div style="width:${(100*x.n/mx).toFixed(1)}%"></div></div></td><td class="n mut">${st.scope=="w"&&!st.model&&!st.hw.size?fmt(x.r.p):"–"}</td></tr>`).join("")||`<tr><td colspan=6 class="mut">–</td></tr>`;
  document.getElementById("vtsum").textContent=fmt(tot)+" / "+rs.length;
  const top=[...rs].sort((a,b)=>b.n-a.n).slice(0,12);const W=640,lw=110,bh=20,g=6,H=top.length*(bh+g)+4;
  let s=`<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px" xmlns="http://www.w3.org/2000/svg">`;
  const m2=Math.max(1,...top.map(x=>x.n));
- top.forEach((x,i)=>{const y=i*(bh+g)+2,w=(W-lw-100)*x.n/m2;s+=`<text x="${lw-8}" y="${y+15}" fill="#e2e8f0" font-size="13" text-anchor="end">${x.r.v}</text><rect x="${lw}" y="${y}" width="${Math.max(w,2)}" height="${bh}" rx="4" fill="#38bdf8"/><text x="${lw+w+6}" y="${y+15}" fill="#94a3b8" font-size="12">${fmt(x.n)} (${(100*x.n/tot).toFixed(1).replace(".",",")} %)</text>`});
+ top.forEach((x,i)=>{const y=i*(bh+g)+2,w=(W-lw-100)*x.n/m2;s+=svl(x.r.v,`<text x="${lw-8}" y="${y+15}" fill="#7dd3fc" font-size="13" text-anchor="end" text-decoration="underline">${x.r.v}</text>`)+`<rect x="${lw}" y="${y}" width="${Math.max(w,2)}" height="${bh}" rx="4" fill="#38bdf8"/><text x="${lw+w+6}" y="${y+15}" fill="#94a3b8" font-size="12">${fmt(x.n)} (${(100*x.n/tot).toFixed(1).replace(".",",")} %)</text>`});
  document.getElementById("vchart").innerHTML=s+"</svg>";
  document.querySelectorAll("#vt th").forEach(th=>{th.dataset.arrow=th.dataset.k==st.sort?(st.dir<0?" ▼":" ▲"):"";th.querySelector(".ar").textContent=th.dataset.arrow});
 }
@@ -344,6 +358,13 @@ hw_cards = [
 hw_html = ''.join('<div class="hwc"><h4>%s</h4><div class="small"><b>%s</b></div><div class="small mut">%s</div></div>' % (
     t, bi(fy, ey), bi(fd, ed)) for t, fy, ey, fd, ed in hw_cards)
 
+from collections import Counter as _C
+_lc = _C(x['src'] for x in LINKS.values())
+_n = sum(_lc.values())
+_fb_fi = '' if _n == _lc['NotATeslaApp'] else ' Muut: Teslascopen versiosivu (%d) tai TeslaFin versiosivu (%d).' % (_lc['Teslascope'], _lc['TeslaFi'])
+_fb_en = '' if _n == _lc['NotATeslaApp'] else ' Others: Teslascope version page (%d) or TeslaFi version page (%d).' % (_lc['Teslascope'], _lc['TeslaFi'])
+LINKNOTE = bi('🔗 Versionumerot ovat linkkejä julkaisutiedotteisiin (aukeavat uuteen välilehteen): <a href="https://www.notateslaapp.com/software-updates/" target="_blank" rel="noopener">NotATeslaApp</a>in versiokohtainen julkaisutiedotesivu, %d/%d versiota.%s Jokainen linkki tarkistettu hakuhetkellä (HTTP 200, sivulla ominaisuuslista). Pistepäivityksissä ilman uusia ominaisuuksia sivu toistaa pääversion ominaisuudet tai listaa korjaukset.' % (_lc['NotATeslaApp'], _n, _fb_fi),
+  '🔗 Version numbers link to release notes (new tab): NotATeslaApp per-version release notes, %d/%d versions.%s Every link checked at fetch time (HTTP 200, feature list present). Point releases without new features repeat the major version features or list fixes.' % (_lc['NotATeslaApp'], _n, _fb_en))
 eu_new, eu_common = best(lambda r: sum(r['eu']), 3)
 w_new, w_common = best(lambda r: sum(r['w']), 5)
 
@@ -357,6 +378,7 @@ page = f'''<!DOCTYPE html>
 <span class="tag">{bi('Tilastot', 'Statistics')}</span>
 <h1>{bi('Tesla-ohjelmistoversiot – mitä Suomessa jaetaan?', 'Tesla software versions – what is rolling out in Finland?')}</h1>
 <p class="mut">{bi('Tiedot haettu: ' + FETCHED_FI, 'Data fetched: ' + FETCHED_EN)}. {bi('Kaikki luvut julkisista lähteistä (linkit alla); TeslaFi on vapaaehtoisten otos, ei koko autokanta.', 'All figures from public sources (links below); TeslaFi is a volunteer sample, not the whole fleet.')}</p>
+<p class="small mut">{LINKNOTE}</p>
 <div class="kpis">{kpi_html}</div>
 
 <h2>🇫🇮 {bi('Suomi: versiot ja rauta', 'Finland: versions and hardware')}</h2>
@@ -369,9 +391,9 @@ page = f'''<!DOCTYPE html>
 
 <h2>🌍 {bi('Suomi vs. Eurooppa vs. maailma', 'Finland vs Europe vs world')}</h2>
 <table class="st"><thead><tr><th></th><th class="n">{bi('Autoja', 'Cars')}</th><th>{bi('Yleisin versio', 'Most common')}</th><th>{bi('Uusin versio', 'Newest')}</th></tr></thead><tbody>
-<tr><td><b>{bi('Suomi', 'Finland')}</b></td><td class="n">{fmt(tot_fi)}</td><td>{fi_common[0]['v'] if fi_common else '–'} ({pct(fi_common[1], tot_fi) if fi_common else ''} %)</td><td>{fi_new[0]['v'] if fi_new else '–'} ({bi('≥1 auto', '≥1 car')})</td></tr>
-<tr><td>{bi('Eurooppa', 'Europe')}</td><td class="n">{fmt(tot_eu)}</td><td>{eu_common[0]['v'] if eu_common else '–'} ({pct(eu_common[1], tot_eu) if eu_common else ''} %)</td><td>{eu_new[0]['v'] if eu_new else '–'} ({bi('≥3 autoa', '≥3 cars')})</td></tr>
-<tr><td>{bi('Maailma', 'World')}</td><td class="n">{fmt(tot_w)}</td><td>{w_common[0]['v'] if w_common else '–'} ({pct(w_common[1], tot_w) if w_common else ''} %)</td><td>{w_new[0]['v'] if w_new else '–'} ({bi('≥5 autoa', '≥5 cars')})</td></tr>
+<tr><td><b>{bi('Suomi', 'Finland')}</b></td><td class="n">{fmt(tot_fi)}</td><td>{VL(fi_common[0]['v']) if fi_common else '–'} ({pct(fi_common[1], tot_fi) if fi_common else ''} %)</td><td>{VL(fi_new[0]['v']) if fi_new else '–'} ({bi('≥1 auto', '≥1 car')})</td></tr>
+<tr><td>{bi('Eurooppa', 'Europe')}</td><td class="n">{fmt(tot_eu)}</td><td>{VL(eu_common[0]['v']) if eu_common else '–'} ({pct(eu_common[1], tot_eu) if eu_common else ''} %)</td><td>{VL(eu_new[0]['v']) if eu_new else '–'} ({bi('≥3 autoa', '≥3 cars')})</td></tr>
+<tr><td>{bi('Maailma', 'World')}</td><td class="n">{fmt(tot_w)}</td><td>{VL(w_common[0]['v']) if w_common else '–'} ({pct(w_common[1], tot_w) if w_common else ''} %)</td><td>{VL(w_new[0]['v']) if w_new else '–'} ({bi('≥5 autoa', '≥5 cars')})</td></tr>
 </tbody></table>
 <p class="small mut">{bi('Eurooppa = TeslaFin maarivien summa Euroopan maille (ml. Turkki, Ukraina, Iso-Britannia, Norja, Sveitsi).', 'Europe = sum of TeslaFi country rows for European countries (incl. Turkey, Ukraine, UK, Norway, Switzerland).')}</p>
 
@@ -420,6 +442,7 @@ page = f'''<!DOCTYPE html>
 
 <h2>📚 {bi('Lähteet ja rajoitukset', 'Sources and caveats')}</h2>
 <ul>{''.join('<li><a href="%s">%s</a> – %s</li>' % (E(u), E(n), d) for n, u, d in srcs)}</ul>
+<p class="small mut">{LINKNOTE}</p>
 <ul class="small mut">
 <li>{bi(f'TeslaFi: {fmt(TF.get("contributing") or 0)} osallistuvaa autoa – itsevalikoitunut otos (enemmän USA:ta ja innokkaita omistajia), ei koko Tesla-kanta. Suomen otos on pieni ({tot_fi} autoa), joten prosentit heiluvat.', f'TeslaFi: {TF.get("contributing")} contributing cars – self-selected sample, not the whole fleet. Finland sample is small ({tot_fi}).')}</li>
 <li>{bi('Teslascope- ja TeslaFi-osuudet eivät ole vertailukelpoisia keskenään (eri otokset).', 'Teslascope and TeslaFi shares are different samples and not directly comparable.')}</li>
@@ -429,7 +452,7 @@ page = f'''<!DOCTYPE html>
 </ul>
 <p class="small mut">{bi('Ei Teslan virallinen sivu. Tiedot haettu ', 'Not an official Tesla page. Data fetched ')}{bi(FETCHED_FI, FETCHED_EN)}.</p>
 </div>
-<script>{JS.replace('__ROWS__', json.dumps(JS_ROWS, separators=(',', ':')))}</script>
+<script>{JS.replace('__ROWS__', json.dumps(JS_ROWS, separators=(',', ':'))).replace('__LINKS__', json.dumps({k: x['url'] for k, x in LINKS.items()}, separators=(',', ':')))}</script>
 </body></html>'''
 open(OUT, 'w', encoding='utf-8').write(page)
 print('kirjoitettu', os.path.abspath(OUT), len(page), 'tavua; FI autoja', tot_fi, 'rivejä', len(rows))
